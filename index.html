@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradeDesk — Day Trading Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080808;
+    --surface: #0f0f0f;
+    --surface2: #161616;
+    --surface3: #1e1e1e;
+    --border: #272727;
+    --green: #00ff87;
+    --green-dim: rgba(0,255,135,0.12);
+    --green-glow: rgba(0,255,135,0.3);
+    --red: #ff3a3a;
+    --red-dim: rgba(255,58,58,0.12);
+    --red-glow: rgba(255,58,58,0.3);
+    --gold: #ffd84d;
+    --text: #e8e8e8;
+    --muted: #666;
+    --muted2: #444;
+    --accent: #ffd84d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--green-glow);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow: 0 0 10px var(--green-glow); }
+    50% { opacity:0.5; box-shadow: 0 0 20px var(--green-glow); }
+  }
+
+  .header-stats {
+    display: flex;
+    gap: 40px;
+  }
+
+  .hstat {
+    text-align: right;
+  }
+
+  .hstat-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .hstat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .hstat-value.pos { color: var(--green); text-shadow: 0 0 20px var(--green-glow); }
+  .hstat-value.neg { color: var(--red); text-shadow: 0 0 20px var(--red-glow); }
+  .hstat-value.neutral { color: var(--gold); }
+
+  /* Nav */
+  nav {
+    display: flex;
+    gap: 4px;
+    padding: 0 40px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-btn {
+    padding: 14px 24px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+    top: 1px;
+  }
+
+  .nav-btn:hover { color: var(--text); }
+  .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* Main layout */
+  main {
+    padding: 32px 40px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* Sections */
+  .section { display: none; }
+  .section.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ==================== DASHBOARD ==================== */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.green::before { background: var(--green); box-shadow: 0 0 20px var(--green-glow); }
+  .stat-card.red::before { background: var(--red); box-shadow: 0 0 20px var(--red-glow); }
+  .stat-card.gold::before { background: var(--gold); }
+  .stat-card.blue::before { background: #4da6ff; }
+
+  .stat-card:hover { border-color: #333; }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-value.pos { color: var(--green); }
+  .stat-value.neg { color: var(--red); }
+  .stat-value.gold { color: var(--gold); }
+  .stat-value.blue { color: #4da6ff; }
+
+  .stat-sub {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ==================== CALENDAR ==================== */
+  .calendar-section { }
+
+  .calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .cal-nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .cal-nav-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 36px; height: 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .cal-nav-btn:hover { background: var(--surface3); border-color: #444; }
+
+  .cal-month {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gold);
+    min-width: 200px;
+    text-align: center;
+  }
+
+  .cal-summary {
+    display: flex;
+    gap: 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+  }
+
+  .cal-sum-item { display: flex; gap: 8px; }
+  .cal-sum-label { color: var(--muted); }
+  .cal-sum-val.pos { color: var(--green); }
+  .cal-sum-val.neg { color: var(--red); }
+
+  .calendar-grid {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cal-weekday {
+    padding: 12px;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .cal-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .cal-day {
+    min-height: 90px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .cal-day:nth-child(7n) { border-right: none; }
+  .cal-day:hover { background: var(--surface2); }
+  .cal-day.empty { cursor: default; background: #0a0a0a; }
+  .cal-day.today { background: rgba(255,216,77,0.04); }
+  .cal-day.today .cal-day-num { color: var(--gold); }
+
+  .cal-day-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--muted2);
+    margin-bottom: 8px;
+  }
+
+  .cal-day.has-trades .cal-day-num { color: var(--text); }
+
+  .cal-pnl {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .cal-pnl.pos { color: var(--green); text-shadow: 0 0 10px var(--green-glow); }
+  .cal-pnl.neg { color: var(--red); text-shadow: 0 0 10px var(--red-glow); }
+
+  .cal-trade-count {
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .cal-day-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    transition: height 0.2s;
+  }
+
+  .cal-day-bar.pos { background: var(--green); opacity: 0.6; }
+  .cal-day-bar.neg { background: var(--red); opacity: 0.6; }
+  .cal-day:hover .cal-day-bar { height: 4px; opacity: 1; }
+
+  /* ==================== TRADE LOG ==================== */
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .log-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .btn-add {
+    background: var(--gold);
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .btn-add:hover { background: #ffe066; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,216,77,0.3); }
+
+  .filters {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .filter-select, .filter-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .filter-select:focus, .filter-input:focus { outline: none; border-color: var(--gold); }
+
+  .trade-table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 14px 16px;
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 400;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  th:hover { color: var(--text); }
+
+  td {
+    padding: 14px 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .badge.long { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,255,135,0.3); }
+  .badge.short { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,58,58,0.3); }
+
+  .pnl-cell.pos { color: var(--green); font-weight: 700; }
+  .pnl-cell.neg { color: var(--red); font-weight: 700; }
+
+  .action-btns { display: flex; gap: 8px; }
+
+  .btn-icon {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 28px; height: 28px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .btn-icon:hover { color: var(--text); border-color: #444; }
+  .btn-icon.delete:hover { color: var(--red); border-color: var(--red); }
+
+  /* ==================== MODAL ==================== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 36px;
+    width: 560px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.2s;
+    position: relative;
+  }
+
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 28px;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover { color: var(--text); }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: span 2; }
+
+  label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  input, select, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+    background: var(--surface3);
+  }
+
+  textarea { resize: vertical; min-height: 80px; }
+
+  select option { background: var(--surface2); }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    justify-content: flex-end;
+  }
+
+  .btn-cancel {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel:hover { border-color: #444; color: var(--text); }
+
+  .btn-save {
+    background: var(--gold);
+    color: #000;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 4px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-save:hover { background: #ffe066; box-shadow: 0 4px 16px rgba(255,216,77,0.3); }
+
+  /* ==================== CHART ==================== */
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .chart-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  canvas { width: 100% !important; display: block; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.5; }
+
+  .empty-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+  }
+
+  /* Day detail panel */
+  .day-detail {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    margin-top: 20px;
+    display: none;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .day-detail.open { display: block; }
+
+  .day-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .day-detail-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .scrollbar::-webkit-scrollbar { width: 4px; }
+  .scrollbar::-webkit-scrollbar-track { background: var(--surface); }
+  .scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 768px) {
+    header { padding: 16px 20px; }
+    main { padding: 20px; }
+    nav { padding: 0 20px; overflow-x: auto; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full { grid-column: span 1; }
+    .header-stats { display: none; }
+    .cal-day { min-height: 60px; padding: 6px; }
+    .cal-pnl { font-size: 11px; }
+    td, th { padding: 10px 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    TRADEDESK
+  </div>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-label">Total P&L</div>
+      <div class="hstat-value pos" id="hdr-total-pnl">$0.00</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Win Rate</div>
+      <div class="hstat-value neutral" id="hdr-winrate">0%</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Total Trades</div>
+      <div class="hstat-value neutral" id="hdr-total-trades">0</div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <button class="nav-btn active" onclick="showSection('dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="showSection('calendar')">P&L Calendar</button>
+  <button class="nav-btn" onclick="showSection('log')">Trade Log</button>
+</nav>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <div class="section active" id="section-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card green">
+        <div class="stat-label">Total P&amp;L</div>
+        <div class="stat-value pos" id="dash-total-pnl">$0.00</div>
+        <div class="stat-sub" id="dash-pnl-sub">All time</div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-label">Win Rate</div>
+        <div class="stat-value gold" id="dash-winrate">0%</div>
+        <div class="stat-sub" id="dash-wr-sub">0W / 0L</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Avg Win</div>
+        <div class="stat-value blue" id="dash-avg-win">$0.00</div>
+        <div class="stat-sub">Per winning trade</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Avg Loss</div>
+        <div class="stat-value neg" id="dash-avg-loss">$0.00</div>
+        <div class="stat-sub">Per losing trade</div>
+      </div>
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns: repeat(3,1fr);">
+      <div class="stat-card gold">
+        <div class="stat-label">Best Day</div>
+        <div class="stat-value pos" id="dash-best-day">$0.00</div>
+        <div class="stat-sub" id="dash-best-day-date">—</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Worst Day</div>
+        <div class="stat-value neg" id="dash-worst-day">$0.00</div>
+        <div class="stat-sub" id="dash-worst-day-date">—</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Profit Factor</div>
+        <div class="stat-value blue" id="dash-profit-factor">0.00</div>
+        <div class="stat-sub">Gross profit / loss</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Cumulative P&amp;L Curve</div>
+      <canvas id="pnl-chart" height="200"></canvas>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Daily P&amp;L (Last 30 Days)</div>
+      <canvas id="daily-chart" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="section" id="section-calendar">
+    <div class="calendar-header">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="changeMonth(-1)">&#8249;</button>
+        <div class="cal-month" id="cal-month-label">—</div>
+        <button class="cal-nav-btn" onclick="changeMonth(1)">&#8250;</button>
+      </div>
+      <div class="cal-summary">
+        <div class="cal-sum-item">
+          <span class="cal-sum-label">Month P&L:</span>
+          <span class="cal-sum-val" id="cal-month-pnl">$0.00</span>
+        </div>
+        <div class="cal-sum-item">
+          <span class="cal-sum-label">Green Days:</span>
+          <span class="cal-sum-val pos" id="cal-green-days">0</span>
+        </div>
+        <div class="cal-sum-item">
+          <span class="cal-sum-label">Red Days:</span>
+          <span class="cal-sum-val neg" id="cal-red-days">0</span>
+        </div>
+      </div>
+    </div>
+    <div class="calendar-grid">
+      <div class="cal-weekdays">
+        <div class="cal-weekday">Sun</div>
+        <div class="cal-weekday">Mon</div>
+        <div class="cal-weekday">Tue</div>
+        <div class="cal-weekday">Wed</div>
+        <div class="cal-weekday">Thu</div>
+        <div class="cal-weekday">Fri</div>
+        <div class="cal-weekday">Sat</div>
+      </div>
+      <div class="cal-days" id="cal-days"></div>
+    </div>
+    <div class="day-detail scrollbar" id="day-detail">
+      <div class="day-detail-header">
+        <div class="day-detail-title" id="day-detail-title">—</div>
+        <div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;" id="day-detail-pnl">$0.00</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Ticker</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>P&L</th>
+          </tr>
+        </thead>
+        <tbody id="day-detail-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TRADE LOG -->
+  <div class="section" id="section-log">
+    <div class="log-header">
+      <div class="log-title">Trade Log</div>
+      <button class="btn-add" onclick="openModal()">+ New Trade</button>
+    </div>
+    <div class="filters">
+      <input type="date" class="filter-input" id="filter-date-from" placeholder="From" onchange="renderTradeTable()">
+      <input type="date" class="filter-input" id="filter-date-to" placeholder="To" onchange="renderTradeTable()">
+      <select class="filter-select" id="filter-side" onchange="renderTradeTable()">
+        <option value="">All Sides</option>
+        <option value="long">Long</option>
+        <option value="short">Short</option>
+      </select>
+      <select class="filter-select" id="filter-result" onchange="renderTradeTable()">
+        <option value="">All Results</option>
+        <option value="win">Winners</option>
+        <option value="loss">Losers</option>
+      </select>
+      <input type="text" class="filter-input" id="filter-ticker" placeholder="Ticker..." oninput="renderTradeTable()" style="width:120px;">
+    </div>
+    <div class="trade-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('date')">Date ↕</th>
+            <th onclick="sortBy('time')">Time</th>
+            <th onclick="sortBy('ticker')">Ticker ↕</th>
+            <th>Side</th>
+            <th onclick="sortBy('qty')">Qty ↕</th>
+            <th onclick="sortBy('entry')">Entry ↕</th>
+            <th onclick="sortBy('exit')">Exit ↕</th>
+            <th onclick="sortBy('pnl')">P&L ↕</th>
+            <th>Setup</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="trade-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none">
+        <div class="empty-icon">📊</div>
+        <div class="empty-text">No trades logged yet.<br>Add your first trade to get started.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnBg(event)">
+  <div class="modal scrollbar">
+    <div class="modal-title">
+      <span id="modal-title-text">New Trade</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="form-group">
+        <label>Time</label>
+        <input type="time" id="f-time">
+      </div>
+      <div class="form-group">
+        <label>Ticker / Symbol</label>
+        <input type="text" id="f-ticker" placeholder="AAPL" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Side</label>
+        <select id="f-side">
+          <option value="long">Long</option>
+          <option value="short">Short</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quantity / Shares</label>
+        <input type="number" id="f-qty" placeholder="100" min="0" step="1">
+      </div>
+      <div class="form-group">
+        <label>Entry Price ($)</label>
+        <input type="number" id="f-entry" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Exit Price ($)</label>
+        <input type="number" id="f-exit" placeholder="0.00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Commission ($)</label>
+        <input type="number" id="f-commission" placeholder="0.00" step="0.01" value="0">
+      </div>
+      <div class="form-group">
+        <label>Setup / Strategy</label>
+        <input type="text" id="f-setup" placeholder="e.g. ORB, VWAP Reclaim">
+      </div>
+      <div class="form-group">
+        <label>Market</label>
+        <select id="f-market">
+          <option value="Stocks">Stocks</option>
+          <option value="Options">Options</option>
+          <option value="Futures">Futures</option>
+          <option value="Crypto">Crypto</option>
+          <option value="Forex">Forex</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Notes</label>
+        <textarea id="f-notes" placeholder="Trade notes, reasoning, lessons learned..."></textarea>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);display:flex;gap:20px;">
+      <span>Calculated P&L: <span id="calc-pnl" style="color:var(--text);font-weight:700;">$0.00</span></span>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveTrade()">Save Trade</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== STATE ====================
+let trades = JSON.parse(localStorage.getItem('tradedesk_trades') || '[]');
+let editingId = null;
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let sortKey = 'date';
+let sortDir = -1;
+
+// ==================== UTILS ====================
+function fmt(n) {
+  const v = parseFloat(n) || 0;
+  return (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtAbs(n) {
+  const v = parseFloat(n) || 0;
+  return '$' + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function calcPnl(t) {
+  const qty = parseFloat(t.qty)||0, entry = parseFloat(t.entry)||0, exit = parseFloat(t.exit)||0, comm = parseFloat(t.commission)||0;
+  if (t.side === 'long') return (exit - entry) * qty - comm;
+  else return (entry - exit) * qty - comm;
+}
+function saveTrades() { localStorage.setItem('tradedesk_trades', JSON.stringify(trades)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+// ==================== SECTIONS ====================
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'dashboard') { renderDashboard(); }
+  if (id === 'calendar') { renderCalendar(); }
+  if (id === 'log') { renderTradeTable(); }
+}
+
+// ==================== MODAL ====================
+function openModal(id = null) {
+  editingId = id;
+  const m = id ? trades.find(t => t.id === id) : null;
+  document.getElementById('modal-title-text').textContent = id ? 'Edit Trade' : 'New Trade';
+  document.getElementById('f-date').value = m ? m.date : new Date().toISOString().split('T')[0];
+  document.getElementById('f-time').value = m ? (m.time||'09:30') : '09:30';
+  document.getElementById('f-ticker').value = m ? m.ticker : '';
+  document.getElementById('f-side').value = m ? m.side : 'long';
+  document.getElementById('f-qty').value = m ? m.qty : '';
+  document.getElementById('f-entry').value = m ? m.entry : '';
+  document.getElementById('f-exit').value = m ? m.exit : '';
+  document.getElementById('f-commission').value = m ? (m.commission||0) : 0;
+  document.getElementById('f-setup').value = m ? (m.setup||'') : '';
+  document.getElementById('f-market').value = m ? (m.market||'Stocks') : 'Stocks';
+  document.getElementById('f-notes').value = m ? (m.notes||'') : '';
+  updateCalcPnl();
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); editingId = null; }
+function closeModalOnBg(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+
+function updateCalcPnl() {
+  const t = {
+    side: document.getElementById('f-side').value,
+    qty: document.getElementById('f-qty').value,
+    entry: document.getElementById('f-entry').value,
+    exit: document.getElementById('f-exit').value,
+    commission: document.getElementById('f-commission').value
+  };
+  const pnl = calcPnl(t);
+  const el = document.getElementById('calc-pnl');
+  el.textContent = fmt(pnl);
+  el.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+['f-side','f-qty','f-entry','f-exit','f-commission'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateCalcPnl);
+});
+document.getElementById('f-ticker').addEventListener('input', function() {
+  this.value = this.value.toUpperCase();
+});
+
+function saveTrade() {
+  const ticker = document.getElementById('f-ticker').value.trim().toUpperCase();
+  const date = document.getElementById('f-date').value;
+  const qty = document.getElementById('f-qty').value;
+  const entry = document.getElementById('f-entry').value;
+  const exit = document.getElementById('f-exit').value;
+  if (!ticker || !date || !qty || !entry || !exit) {
+    alert('Please fill in: Date, Ticker, Qty, Entry, and Exit.');
+    return;
+  }
+  const t = {
+    id: editingId || genId(),
+    date, time: document.getElementById('f-time').value,
+    ticker,
+    side: document.getElementById('f-side').value,
+    qty: parseFloat(qty),
+    entry: parseFloat(entry),
+    exit: parseFloat(exit),
+    commission: parseFloat(document.getElementById('f-commission').value)||0,
+    setup: document.getElementById('f-setup').value,
+    market: document.getElementById('f-market').value,
+    notes: document.getElementById('f-notes').value,
+  };
+  t.pnl = calcPnl(t);
+  if (editingId) {
+    const i = trades.findIndex(x => x.id === editingId);
+    trades[i] = t;
+  } else {
+    trades.push(t);
+  }
+  saveTrades();
+  closeModal();
+  updateHeader();
+  renderTradeTable();
+}
+
+// ==================== HEADER ====================
+function updateHeader() {
+  const total = trades.reduce((s,t) => s + (t.pnl||0), 0);
+  const wins = trades.filter(t => (t.pnl||0) > 0).length;
+  const wr = trades.length ? (wins / trades.length * 100).toFixed(1) : 0;
+  const hpnl = document.getElementById('hdr-total-pnl');
+  hpnl.textContent = fmt(total);
+  hpnl.className = 'hstat-value ' + (total >= 0 ? 'pos' : 'neg');
+  document.getElementById('hdr-winrate').textContent = wr + '%';
+  document.getElementById('hdr-total-trades').textContent = trades.length;
+}
+
+// ==================== DASHBOARD ====================
+function renderDashboard() {
+  const total = trades.reduce((s,t) => s + (t.pnl||0), 0);
+  const wins = trades.filter(t => (t.pnl||0) > 0);
+  const losses = trades.filter(t => (t.pnl||0) < 0);
+  const wr = trades.length ? (wins.length / trades.length * 100).toFixed(1) : 0;
+  const avgWin = wins.length ? wins.reduce((s,t) => s+(t.pnl||0),0) / wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((s,t) => s+(t.pnl||0),0) / losses.length : 0;
+  const grossProfit = wins.reduce((s,t) => s+(t.pnl||0),0);
+  const grossLoss = Math.abs(losses.reduce((s,t) => s+(t.pnl||0),0));
+  const pf = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? '∞' : '0.00';
+
+  // Day P&L
+  const dayMap = {};
+  trades.forEach(t => {
+    dayMap[t.date] = (dayMap[t.date] || 0) + (t.pnl||0);
+  });
+  const dayEntries = Object.entries(dayMap);
+  let bestDay = {v:0,d:'—'}, worstDay = {v:0,d:'—'};
+  dayEntries.forEach(([d,v]) => {
+    if (v > bestDay.v) { bestDay.v = v; bestDay.d = d; }
+    if (v < worstDay.v) { worstDay.v = v; worstDay.d = d; }
+  });
+
+  const dpnl = document.getElementById('dash-total-pnl');
+  dpnl.textContent = fmt(total);
+  dpnl.className = 'stat-value ' + (total >= 0 ? 'pos' : 'neg');
+  document.getElementById('dash-pnl-sub').textContent = trades.length + ' total trades';
+  document.getElementById('dash-winrate').textContent = wr + '%';
+  document.getElementById('dash-wr-sub').textContent = wins.length + 'W / ' + losses.length + 'L';
+  document.getElementById('dash-avg-win').textContent = fmtAbs(avgWin);
+  document.getElementById('dash-avg-loss').textContent = '-' + fmtAbs(avgLoss);
+  document.getElementById('dash-best-day').textContent = fmt(bestDay.v);
+  document.getElementById('dash-best-day-date').textContent = bestDay.d === '—' ? '—' : new Date(bestDay.d + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('dash-worst-day').textContent = fmt(worstDay.v);
+  document.getElementById('dash-worst-day-date').textContent = worstDay.d === '—' ? '—' : new Date(worstDay.d + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('dash-profit-factor').textContent = pf;
+
+  renderCharts(dayMap);
+}
+
+function renderCharts(dayMap) {
+  // Cumulative P&L curve
+  const sorted = [...trades].sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+  let cumulative = 0;
+  const cumData = sorted.map(t => { cumulative += (t.pnl||0); return cumulative; });
+  const cumLabels = sorted.map(t => t.ticker);
+
+  drawLineChart('pnl-chart', cumLabels, cumData);
+
+  // Daily P&L last 30
+  const today = new Date();
+  const days30 = [];
+  const vals30 = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    days30.push(key.slice(5));
+    vals30.push(dayMap[key] || 0);
+  }
+  drawBarChart('daily-chart', days30, vals30);
+}
+
+function drawLineChart(canvasId, labels, data) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 200 * dpr;
+  canvas.style.height = '200px';
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = 200;
+  ctx.clearRect(0, 0, W, H);
+
+  if (data.length < 2) {
+    ctx.fillStyle = '#444';
+    ctx.font = "12px 'Space Mono'";
+    ctx.textAlign = 'center';
+    ctx.fillText('No data yet', W/2, H/2);
+    return;
+  }
+
+  const pad = { top: 20, right: 20, bottom: 30, left: 60 };
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+  const minV = Math.min(...data, 0);
+  const maxV = Math.max(...data, 0);
+  const range = maxV - minV || 1;
+
+  const px = (i) => pad.left + (i / (data.length - 1)) * iW;
+  const py = (v) => pad.top + (1 - (v - minV) / range) * iH;
+
+  // Zero line
+  const zeroY = py(0);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pad.left, zeroY);
+  ctx.lineTo(pad.left + iW, zeroY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Fill gradient
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + iH);
+  const lastVal = data[data.length - 1];
+  if (lastVal >= 0) {
+    grad.addColorStop(0, 'rgba(0,255,135,0.2)');
+    grad.addColorStop(1, 'rgba(0,255,135,0)');
+  } else {
+    grad.addColorStop(0, 'rgba(255,58,58,0)');
+    grad.addColorStop(1, 'rgba(255,58,58,0.2)');
+  }
+  ctx.beginPath();
+  ctx.moveTo(px(0), py(data[0]));
+  data.forEach((v,i) => ctx.lineTo(px(i), py(v)));
+  ctx.lineTo(px(data.length-1), zeroY);
+  ctx.lineTo(px(0), zeroY);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(px(0), py(data[0]));
+  data.forEach((v,i) => ctx.lineTo(px(i), py(v)));
+  ctx.strokeStyle = lastVal >= 0 ? '#00ff87' : '#ff3a3a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Y axis labels
+  ctx.fillStyle = '#666';
+  ctx.font = "10px 'Space Mono'";
+  ctx.textAlign = 'right';
+  [minV, (minV+maxV)/2, maxV].forEach(v => {
+    ctx.fillText('$' + v.toFixed(0), pad.left - 6, py(v) + 4);
+  });
+}
+
+function drawBarChart(canvasId, labels, data) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 160 * dpr;
+  canvas.style.height = '160px';
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = 160;
+  ctx.clearRect(0, 0, W, H);
+  const pad = { top: 20, right: 10, bottom: 30, left: 60 };
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+  const minV = Math.min(...data, 0);
+  const maxV = Math.max(...data, 0);
+  const range = maxV - minV || 1;
+  const barW = iW / data.length * 0.7;
+  const gap = iW / data.length;
+  const zeroY = pad.top + (1 - (0 - minV) / range) * iH;
+
+  // Zero line
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath();
+  ctx.moveTo(pad.left, zeroY);
+  ctx.lineTo(pad.left + iW, zeroY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  data.forEach((v, i) => {
+    if (v === 0) return;
+    const x = pad.left + gap * i + (gap - barW) / 2;
+    const barH = Math.abs((v / range) * iH);
+    const y = v >= 0 ? zeroY - barH : zeroY;
+    ctx.fillStyle = v >= 0 ? 'rgba(0,255,135,0.7)' : 'rgba(255,58,58,0.7)';
+    ctx.fillRect(x, y, barW, barH);
+  });
+
+  // X labels (every 5)
+  ctx.fillStyle = '#555';
+  ctx.font = "9px 'Space Mono'";
+  ctx.textAlign = 'center';
+  labels.forEach((l, i) => {
+    if (i % 5 === 0) ctx.fillText(l, pad.left + gap * i + gap/2, H - 10);
+  });
+
+  // Y labels
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#555';
+  [minV, maxV].forEach(v => {
+    if (v !== 0) ctx.fillText('$'+v.toFixed(0), pad.left - 4, pad.top + (1-(v-minV)/range)*iH + 4);
+  });
+}
+
+// ==================== CALENDAR ====================
+function renderCalendar() {
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-month-label').textContent = months[calMonth] + ' ' + calYear;
+
+  const dayMap = {};
+  trades.forEach(t => {
+    const [y,m] = t.date.split('-').map(Number);
+    if (y === calYear && m - 1 === calMonth) {
+      dayMap[t.date] = dayMap[t.date] || { pnl: 0, count: 0 };
+      dayMap[t.date].pnl += (t.pnl||0);
+      dayMap[t.date].count++;
+    }
+  });
+
+  let monthPnl = 0, greenDays = 0, redDays = 0;
+  Object.values(dayMap).forEach(d => {
+    monthPnl += d.pnl;
+    if (d.pnl > 0) greenDays++;
+    else if (d.pnl < 0) redDays++;
+  });
+
+  const mpnl = document.getElementById('cal-month-pnl');
+  mpnl.textContent = fmt(monthPnl);
+  mpnl.className = 'cal-sum-val ' + (monthPnl >= 0 ? 'pos' : 'neg');
+  document.getElementById('cal-green-days').textContent = greenDays;
+  document.getElementById('cal-red-days').textContent = redDays;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = new Date().toISOString().split('T')[0];
+
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const info = dayMap[dateStr];
+    const isToday = dateStr === today;
+    let cls = 'cal-day';
+    if (isToday) cls += ' today';
+    if (info) cls += ' has-trades';
+    html += `<div class="${cls}" onclick="showDayDetail('${dateStr}')">
+      <div class="cal-day-num">${d}</div>`;
+    if (info) {
+      const pnlCls = info.pnl >= 0 ? 'pos' : 'neg';
+      html += `<div class="cal-pnl ${pnlCls}">${fmt(info.pnl)}</div>
+      <div class="cal-trade-count">${info.count} trade${info.count > 1 ? 's' : ''}</div>
+      <div class="cal-day-bar ${pnlCls}"></div>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('cal-days').innerHTML = html;
+  document.getElementById('day-detail').classList.remove('open');
+}
+
+function changeMonth(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function showDayDetail(dateStr) {
+  const dayTrades = trades.filter(t => t.date === dateStr);
+  if (!dayTrades.length) return;
+  const total = dayTrades.reduce((s,t) => s+(t.pnl||0),0);
+  const d = new Date(dateStr + 'T12:00:00');
+  document.getElementById('day-detail-title').textContent = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const pnlEl = document.getElementById('day-detail-pnl');
+  pnlEl.textContent = fmt(total);
+  pnlEl.style.color = total >= 0 ? 'var(--green)' : 'var(--red)';
+  const sorted = [...dayTrades].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+  document.getElementById('day-detail-body').innerHTML = sorted.map(t => `
+    <tr>
+      <td>${t.time||'—'}</td>
+      <td style="font-weight:700;color:var(--gold)">${t.ticker}</td>
+      <td><span class="badge ${t.side}">${t.side}</span></td>
+      <td>${t.qty}</td>
+      <td>$${parseFloat(t.entry).toFixed(2)}</td>
+      <td>$${parseFloat(t.exit).toFixed(2)}</td>
+      <td class="pnl-cell ${(t.pnl||0) >= 0 ? 'pos' : 'neg'}">${fmt(t.pnl||0)}</td>
+    </tr>
+  `).join('');
+  document.getElementById('day-detail').classList.add('open');
+}
+
+// ==================== TRADE TABLE ====================
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = -1; }
+  renderTradeTable();
+}
+
+function renderTradeTable() {
+  const dateFrom = document.getElementById('filter-date-from').value;
+  const dateTo = document.getElementById('filter-date-to').value;
+  const side = document.getElementById('filter-side').value;
+  const result = document.getElementById('filter-result').value;
+  const ticker = document.getElementById('filter-ticker').value.toUpperCase();
+
+  let filtered = trades.filter(t => {
+    if (dateFrom && t.date < dateFrom) return false;
+    if (dateTo && t.date > dateTo) return false;
+    if (side && t.side !== side) return false;
+    if (result === 'win' && (t.pnl||0) <= 0) return false;
+    if (result === 'loss' && (t.pnl||0) >= 0) return false;
+    if (ticker && !t.ticker.includes(ticker)) return false;
+    return true;
+  });
+
+  filtered.sort((a,b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'pnl') { av = a.pnl||0; bv = b.pnl||0; }
+    if (typeof av === 'number') return (av - bv) * sortDir;
+    return String(av||'').localeCompare(String(bv||'')) * sortDir;
+  });
+
+  const tbody = document.getElementById('trade-tbody');
+  const empty = document.getElementById('empty-state');
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(t => `
+    <tr>
+      <td>${t.date}</td>
+      <td>${t.time||'—'}</td>
+      <td style="font-weight:700;color:var(--gold);font-size:14px">${t.ticker}</td>
+      <td><span class="badge ${t.side}">${t.side}</span></td>
+      <td>${t.qty}</td>
+      <td>$${parseFloat(t.entry).toFixed(2)}</td>
+      <td>$${parseFloat(t.exit).toFixed(2)}</td>
+      <td class="pnl-cell ${(t.pnl||0) >= 0 ? 'pos' : 'neg'}">${fmt(t.pnl||0)}</td>
+      <td style="color:var(--muted);font-size:11px">${t.setup||'—'}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn-icon" onclick="openModal('${t.id}')" title="Edit">✎</button>
+          <button class="btn-icon delete" onclick="deleteTrade('${t.id}')" title="Delete">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function deleteTrade(id) {
+  if (!confirm('Delete this trade?')) return;
+  trades = trades.filter(t => t.id !== id);
+  saveTrades();
+  updateHeader();
+  renderTradeTable();
+}
+
+// ==================== INIT ====================
+function init() {
+  updateHeader();
+  renderDashboard();
+}
+
+init();
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('section-dashboard').classList.contains('active')) {
+    renderDashboard();
+  }
+});
+</script>
+</body>
+</html>
